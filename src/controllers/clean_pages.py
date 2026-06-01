@@ -1,6 +1,7 @@
-from bs4 import BeautifulSoup
-from pprint import pprint
+from bs4 import BeautifulSoup, Comment
+from bs4.element import NavigableString
 import requests
+import re
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -21,17 +22,22 @@ def find_all_anchors(page_text):
     return href
 
 def get_title_and_subtitle(plant_info: BeautifulSoup, info: dict[str, str]):
-    info["name"]=plant_info.find('h1').get_text()
-    info["scientific_name"] = plant_info.find('h2').get_text().strip()
+    names = plant_info.find('div', class_='mb-2 capitalize').get_text('\n',strip=True).split('\n')
+    
+    info["name"] = names[0]
+    info["scientific_name"] = names[1]
+
+    if len(names) == 3:
+        info["other_names"] = list(names[2].removeprefix('Also Known As - ').split(','))
 
     return info
 
-def clean_pruning_whater_sunlight(plant_info: BeautifulSoup, info: dict[str]):
+def clean_pruning_water_sunlight(plant_info: BeautifulSoup, info: dict[str, str]):
 
-    pruning_whater_sunlight_title = plant_info.find_all('h3', class_='font-bold text-xl capitalize')
-    pruning_whater_sunlight_text = plant_info.find_all('p', class_='line-clamp-2 whitespace-pre-wrap break-words')
+    pruning_water_sunlight_title = plant_info.find_all('h3', class_='font-bold text-xl capitalize')
+    pruning_water_sunlight_text = plant_info.find_all('p', class_='line-clamp-2 whitespace-pre-wrap break-words')
 
-    for paragraph, h3 in zip(pruning_whater_sunlight_text, pruning_whater_sunlight_title):
+    for paragraph, h3 in zip(pruning_water_sunlight_text, pruning_water_sunlight_title):
         title = h3.get_text()
         description = paragraph.get_text()
 
@@ -39,21 +45,67 @@ def clean_pruning_whater_sunlight(plant_info: BeautifulSoup, info: dict[str]):
 
     return info
 
-def plant_features(plant_info: BeautifulSoup, info):
-    features = plant_info.find_all('div', 'flex gap-1 capitalize')
+def get_season_flowering_and_harvest(plant_info: BeautifulSoup, info: dict[str, str]):
+    season = ['Fall', 'Winter', 'Spring', 'Summer']
+    info['seasons'] = {}
+    counter = 0
     
-    temp_dict = {}
+    try:
+        elements = plant_info.find('div',  class_='grid grid-cols-2 md:grid-cols-4 gap-1 text-center pt-1').children
+
+        for element in elements:
+            element_div = element.find_next()
+            text = ''
+
+            if '\n' == element.get_text():
+                continue
+
+            elif element_div.find_all('div', class_='tooltips inline-block relative'):
+                harvest_or_fruit = element.get_text()
+                text = re.sub(r'\n+', '\n', harvest_or_fruit).strip().split('\n')
+                
+            else:
+                text = None
+
+            info['seasons'][season[counter]] = text
+            counter += 1
+    except AttributeError:
+        return info
+
+    return info
+            
+
+
+def plant_features(plant_info: BeautifulSoup, info: dict[str, str]):
+    features = plant_info.find('div', class_='text-xs grid md:grid-cols-2 gap-2 bg-gray-100 rounded p-3').children
+
+    info['features'] = {}
 
     for feature in features:
-        title = features[feature].h3.get_text()
-        value = feature[feature].p.get_text()
-        temp_dict[title] = value
+        
+        if not isinstance(feature, (Comment, NavigableString)):
+            title = feature.h3.get_text().removesuffix(':')
+            value = feature.p.get_text()
+            info['features'][title] = value
     
-    return []
+    return info
 
-def get_season(plant_info: BeautifulSoup, info):
-    page_text = plant_info.find_all('div', class_='grid grid-cols-2 md:grid-cols-4 gap-1 text-center text-xs')
+def get_months_flowering_and_harvest(plant_info: BeautifulSoup, info: dict[str, str]):
+    months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
+    info['months'] = {}
     
+    try:
+        all_month_divs = plant_info.find('div', class_='grid grid-cols-2 md:grid-cols-4 gap-1 text-center text-xs')
+        sla = all_month_divs.find_all('div', class_='py-3')
+
+        for month in range(len(months)):
+            class_color = sla[month].get('class', None)[0]
+            info['months'][months[month]] = class_color.split('-')[1]
+    except AttributeError:
+        return info
+
+    return info
+
 
 
 def clean_info_page(pages: list[str]):
@@ -66,7 +118,7 @@ def clean_info_page(pages: list[str]):
             info = {}
         
             plant_id = page.split('/')[-1]
-            info['id'] = plant_id
+            info['id'] = int(plant_id)
         
             page_text = session.get(url=page, headers=HEADERS).text    
         
@@ -74,7 +126,11 @@ def clean_info_page(pages: list[str]):
             
             get_title_and_subtitle(plant_info, info)
 
-            clean_pruning_whater_sunlight(plant_info, info)
+            clean_pruning_water_sunlight(plant_info, info)
+
+            get_season_flowering_and_harvest(plant_info, info)
+
+            get_months_flowering_and_harvest(plant_info, info)        
 
             all_info.append(info)
 
