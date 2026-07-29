@@ -1,16 +1,41 @@
 from src.classes.RequestPage import Page
-from src.controllers.clean_pages import find_all_anchors, clean_info_page
-from pprint import pprint
+from src.controllers.clean_pages import clean_info_page
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
+from src.models.main import save_in_database
+from dotenv import load_dotenv
+import os
 
-URL = "https://perenual.com/plant-species-database-search-finder"
-href = []
+load_dotenv()
+
+URL = os.getenv("URL")
 
 page = Page()
 
-html_page_text = page.get_page(URL)
+def process_plant(id):
+    with requests.Session() as session:
+        html_page_text = page.get_page(
+            f"{URL}{id}",
+            session=session
+        )
 
-anchors = find_all_anchors(html_page_text)
+        plant_data = clean_info_page(
+            html_page_text,
+            session,
+            f"{URL}{id}"
+        )
 
-html_pages_texts: list[str] = page.get_pages(anchors[0:2])
+        save_in_database(plant_data)
 
-pprint(clean_info_page(anchors[0:2]))
+
+with ThreadPoolExecutor(max_workers=30) as executor:
+    futures = [
+        executor.submit(process_plant, id)
+        for id in range(1, 10105)
+    ]
+
+    for future in as_completed(futures):
+        try:
+            future.result()
+        except Exception as e:
+            print(f"Erro: {e}")

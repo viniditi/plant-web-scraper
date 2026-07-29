@@ -1,21 +1,23 @@
 import requests
-
+from requests import Response, Session
 
 class Page():
-    def get_page(self, url: str) -> str:
-        """Returns an HTML page as string"""
-        try:
-            # session = requests.Session()
+    # def get_page(self, url: str) -> str:
+    #     """Returns an HTML page as string"""
+    #     try:
+    #         # session = requests.Session()
 
-            page = requests.get(url=url, headers={
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-})
-            if page.status_code != 200:
-                return f"Status code for '{url}' is different than 200, Status Code: {page.status_code}"
-            return page.text
+    #         page = requests.get(url=url, headers={
+    #             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    #         })
 
-        except Exception as err:
-            return f"An error had occurred. \nError: {err}"
+    #         if page.status_code != 200:
+    #             raise Exception(f"Deu pau: {page.status_code}")
+
+    #         return page.text
+
+    #     except Exception as err:
+    #             raise Exception(f"Deu pau: {err}")
         
 
     def get_pages(self, urls: tuple[str] | list[str]) -> list[str]:
@@ -36,3 +38,23 @@ class Page():
                     return f"An error had occurred. \nError: {err}"
         
         return pages
+
+    def get_page(self, url: str, session: Session) -> str:
+        #TODO:Fix the docstring
+        """Returns a list of HTML pages as string"""
+    
+        try:
+            session = requests.Session()
+            page = session.get(
+                url=url,
+                headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            })
+
+            if page.status_code != 200:
+                return f"Status code for '{url}' is different than 200, Status Code: {page.status_code}"
+            
+        except Exception as err:
+            return f"An error had occurred. \nError: {err}"
+        
+        return page.text

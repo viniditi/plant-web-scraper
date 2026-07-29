@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup, Comment
 from bs4.element import NavigableString
 import requests
+from requests import Session
 import re
 
 HEADERS = {
@@ -20,6 +21,21 @@ def find_all_anchors(page_text):
             href.append(href_value)
 
     return href
+
+def get_img_src(plant_info: BeautifulSoup, info: dict[str, str], session: requests.Session):
+    img = plant_info.find("img", class_="w-full rounded")
+    
+    info["alt_img"] = img.get("alt", None) or None
+
+    img_url = img["src"]
+
+    imagem = session.get(img_url)
+
+    with open(f"./images/imagem_{info["id"]}.jpg", "wb") as f:
+        f.write(imagem.content)
+
+    return info
+
 
 def get_title_and_subtitle(plant_info: BeautifulSoup, info: dict[str, str]):
     names = plant_info.find('div', class_='mb-2 capitalize').get_text('\n',strip=True).split('\n')
@@ -108,31 +124,26 @@ def get_months_flowering_and_harvest(plant_info: BeautifulSoup, info: dict[str, 
 
 
 
-def clean_info_page(pages: list[str]):
+def clean_info_page(page: str, session: Session, url: str) -> None:
+    #TODO: Add docstring here
+    info = {}
 
-    all_info = []
+    plant_id = url.split('/')[-1]
+    info['id'] = int(plant_id)   
 
-    with requests.Session() as session:
-        for page in pages:
+    plant_info = BeautifulSoup(page, "html.parser")
+    
+    get_title_and_subtitle(plant_info, info)
 
-            info = {}
-        
-            plant_id = page.split('/')[-1]
-            info['id'] = int(plant_id)
-        
-            page_text = session.get(url=page, headers=HEADERS).text    
-        
-            plant_info = BeautifulSoup(page_text, "html.parser")
-            
-            get_title_and_subtitle(plant_info, info)
+    clean_pruning_water_sunlight(plant_info, info)
 
-            clean_pruning_water_sunlight(plant_info, info)
+    get_season_flowering_and_harvest(plant_info, info)
 
-            get_season_flowering_and_harvest(plant_info, info)
+    get_months_flowering_and_harvest(plant_info, info)  
 
-            get_months_flowering_and_harvest(plant_info, info)        
+    plant_features(plant_info, info)     
 
-            all_info.append(info)
+    get_img_src(plant_info, info, session) 
 
-    return all_info
+    return info
 
